@@ -43,18 +43,15 @@ t_client*    client_crea(t_client *user, int clientfd, int fdmax) {
     return (user);
 }
 
-t_client*   client_del(t_client *user, int clientfd, int fdmax) {
-    t_client*   tmp = malloc(sizeof(t_client) * fdmax);
-    if (!tmp)
-        print_error("Fatal error\n", 2, user);
-    int fd = 0;
-    while (fd <= fdmax) {
-        if (fd != clientfd)
-            tmp[fd] = user[fd];
-        fd++;
+void    delete_all(t_client* user, int fdmax, fd_set main, fd_set read) {
+    for (int i = 0; i != fdmax; i++) {
+        if (user[i].msg)
+            free(user[i].msg);
+        FD_CLR(i, &main);
+        FD_CLR(i &read)
+        close(i);
     }
     free(user);
-    return (tmp);
 }
 
 int main(int argc, char** argv) {
@@ -125,7 +122,6 @@ int main(int argc, char** argv) {
                     if (nbytes <= 0) {
                         sprintf(buf_client, "server: client %d just left\n", i);
                         send_all(buf_client, main, i, fdmax, user, sockfd);
-                        //client_del(user, i, fdmax);
                         FD_CLR(i, &main);
                         close(i);
                         break ;
@@ -144,7 +140,7 @@ int main(int argc, char** argv) {
                             if (j == 0) {
                                 user[i].msg = malloc(sizeof(char) * (nbytes));
                                 if (!user[i].msg)
-                                print_error("Fatal error\n", 2, user);
+                                    print_error("Fatal error\n", 2, user);
                             }
                             user[i].msg[j] = buf_recv[start];
                             if (user[i].msg[j] == '\n') {
@@ -164,6 +160,7 @@ int main(int argc, char** argv) {
             i++;
         }
     }
-    free(user);
+    write(1, "fermeture du server", 19);
+    delete_all(user, fdmax, main, read);
     return (0);
 }
