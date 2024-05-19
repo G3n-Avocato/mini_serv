@@ -48,7 +48,7 @@ void    delete_all(t_client* user, int fdmax, fd_set main, fd_set read) {
         if (user[i].msg)
             free(user[i].msg);
         FD_CLR(i, &main);
-        FD_CLR(i &read)
+        FD_CLR(i, &read);
         close(i);
     }
     free(user);
@@ -81,14 +81,18 @@ int main(int argc, char** argv) {
     servaddr.sin_addr.s_addr = htonl(2130706433);
     servaddr.sin_port = htons(port);
     
-    if ((bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
+    if ((bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) {
+        close(sockfd);
         print_error("Fatal error\n", 2, user);
+    }
     
     FD_ZERO(&main);
     FD_ZERO(&read);
 
-    if (listen(sockfd, 10) != 0)
+    if (listen(sockfd, 10) != 0) {
+        close(sockfd);
         print_error("Fatal error\n", 2, user);
+    }
     
     FD_SET(sockfd, &main);
     FD_SET(sockfd, &read);
@@ -97,8 +101,10 @@ int main(int argc, char** argv) {
     int i = 0;
     while (1) {
         read = main;
-        if (select(fdmax + 1, &read, NULL, NULL, NULL) == -1)
+        if (select(fdmax + 1, &read, NULL, NULL, NULL) == -1) {
+            delete_all(user, fdmax, main, read);
             print_error("Fatal error\n", 2, user);
+        }
         i = 0;
         while (i <= fdmax) {
             if (FD_ISSET(i, &read)) {
@@ -116,42 +122,48 @@ int main(int argc, char** argv) {
                     break ;
                 }
                 else {
-                    int nbytes = recv(i, buf_recv, sizeof buf_recv - 1, 0);
+                    int nbytes = recv(i, buf_recv, sizeof buf_recv, 0);
                     buf_recv[nbytes] = '\0';
 
                     if (nbytes <= 0) {
                         sprintf(buf_client, "server: client %d just left\n", i);
                         send_all(buf_client, main, i, fdmax, user, sockfd);
                         FD_CLR(i, &main);
+                        FD_CLR(i, &read);
                         close(i);
                         break ;
                     }
                     else {
-                        int start = 0;
-                        int j = 0;
+                        int it = 0;
+                        int itt = 0;
+                        char    *d = strstr(buf_recv, "\x04");
+
+                        if (d != NULL)
+                            strncpy(d, "\0", 1);
+
                         if (user[i].msg) {
-                            j = strlen(user[i].msg);
-                            user[i].msg = realloc(user[i].msg, sizeof(char) * nbytes);
-                            if (!user[i].msg)
-                                print_error("Fatal error\n", 2, user);
+                            itt = strlen(user[i].msg);
+                            user[i].msg = realloc(user[i].msg, sizeof(char) * (nbytes + 1));
+                        }
+                        else
+                            user[i].msg = malloc(sizeof(char) * (nbytes + 1));
+                        if (!user[i].msg) {
+                            delete_all(user, fdmax, main, read);
+                            print_error("Fatal error\n", 2, user);
                         }
 
-                        while (start < nbytes) {
-                            if (j == 0) {
-                                user[i].msg = malloc(sizeof(char) * (nbytes));
-                                if (!user[i].msg)
-                                    print_error("Fatal error\n", 2, user);
-                            }
-                            user[i].msg[j] = buf_recv[start];
-                            if (user[i].msg[j] == '\n') {
-                                user[i].msg[j] = '\0';
+                        while (it < nbytes) {
+                            user[i].msg[itt] = buf_recv[it];
+                            if (user[i].msg[itt] == '\n') {
+                                user[i].msg[itt] = '\0';
                                 sprintf(buf_client, "client %d: %s\n", i, user[i].msg);
                                 send_all(buf_client, main, i, fdmax, user, sockfd);
-                                bzero(user[i].msg, strlen(user[i].msg));
-                                j = -1;
+                                free(user[i].msg);
+                                user[i].msg = NULL;
+                                itt = -1;
                             }
-                            j++;
-                            start++;
+                            it++;
+                            itt++;
                         }
                         break ;
                     }
