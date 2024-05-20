@@ -54,6 +54,26 @@ void    delete_all(t_client* user, int fdmax, fd_set main, fd_set read) {
     free(user);
 }
 
+char *str_join(char *buf, char *add)
+{
+	char	*newbuf;
+	int		len;
+
+	if (buf == 0)
+		len = 0;
+	else
+		len = strlen(buf);
+	newbuf = malloc(sizeof(*newbuf) * (len + strlen(add) + 1));
+	if (newbuf == 0)
+		return (0);
+	newbuf[0] = 0;
+	if (buf != 0)
+		strcat(newbuf, buf);
+	free(buf);
+	strcat(newbuf, add);
+	return (newbuf);
+}
+
 int main(int argc, char** argv) {
     
     t_client    *user = NULL;
@@ -134,36 +154,20 @@ int main(int argc, char** argv) {
                         break ;
                     }
                     else {
-                        int it = 0;
-                        int itt = 0;
-                        char    *d = strstr(buf_recv, "\x04");
-
-                        if (d != NULL)
-                            strncpy(d, "\0", 1);
-
-                        if (user[i].msg) {
-                            itt = strlen(user[i].msg);
-                            user[i].msg = realloc(user[i].msg, sizeof(char) * (nbytes + 1));
-                        }
-                        else
-                            user[i].msg = malloc(sizeof(char) * (nbytes + 1));
-                        if (!user[i].msg) {
+                        user[i].msg = str_join(user[i].msg, buf_recv);
+                        if (user[i].msg == 0) {
                             delete_all(user, fdmax, main, read);
+                            write(2, "A", 1);
                             print_error("Fatal error\n", 2, user);
                         }
 
-                        while (it < nbytes) {
-                            user[i].msg[itt] = buf_recv[it];
-                            if (user[i].msg[itt] == '\n') {
-                                user[i].msg[itt] = '\0';
-                                sprintf(buf_client, "client %d: %s\n", i, user[i].msg);
-                                send_all(buf_client, main, i, fdmax, user, sockfd);
-                                free(user[i].msg);
-                                user[i].msg = NULL;
-                                itt = -1;
-                            }
-                            it++;
-                            itt++;
+                        char *n = strstr(user[i].msg, "\n");
+                        if (n != NULL) {
+                            strncpy(n, "\0", 1);
+                            sprintf(buf_client, "client %d: %s\n", i, user[i].msg);
+                            send_all(buf_client, main, i, fdmax, user, sockfd);
+                            free(user[i].msg);
+                            user[i].msg = NULL;
                         }
                         break ;
                     }
